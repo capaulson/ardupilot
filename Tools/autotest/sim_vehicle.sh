@@ -7,7 +7,16 @@ VEHICLE=""
 BUILD_TARGET="sitl"
 FRAME=""
 NUM_PROCS=1
+platform='unknown'
+unamestr=`uname`
+if [[ "$unamestr" == 'Linux' ]]; then
+    platform='linux'
+    TMPDIR = '/tmp'
+elif [[ "$unamestr" == 'Darwin' ]]; then
+platform='Darwin'
+fi
 
+echo $TMPDIR
 # check the instance number to allow for multiple copies of the sim running at once
 INSTANCE=0
 USE_VALGRIND=0
@@ -142,7 +151,12 @@ shift $((OPTIND-1))
 kill_tasks() 
 {
     [ "$INSTANCE" -eq "0" ] && {
+    if [[ $platform == 'Darwin' ]]; then
+        killall JSBSim lt-JSBSim ArduPlane.elf ArduCopter.elf APMrover2.elf AntennaTracker.elf
+        else
         killall -q JSBSim lt-JSBSim ArduPlane.elf ArduCopter.elf APMrover2.elf AntennaTracker.elf
+        fi
+
         pkill -f runsim.py
         pkill -f sim_tracker.py
         pkill -f sim_rover.py
@@ -216,25 +230,32 @@ if [ $USE_MAVLINK_GIMBAL == 1 ]; then
     EXTRA_SIM="--gimbal"
 fi
 
-autotest=$(dirname $(readlink -e $0))
-if [ $NO_REBUILD == 0 ]; then
-pushd $autotest/../../$VEHICLE || {
-    echo "Failed to change to vehicle directory for $VEHICLE"
-    usage
-    exit 1
-}
-if [ ! -f $autotest/../../config.mk ]; then
-    echo Generating a default configuration
-    make configure
+if [[ $platform == 'Darwin' ]]; then
+    autotest=$(dirname $(greadlink -e $0))
+    echo $autotest
+else
+    autotest=$(dirname $(readlink -e $0))
+    echo $autotest
 fi
-if [ $CLEAN_BUILD == 1 ]; then
-    make clean
-fi
-make $BUILD_TARGET -j$NUM_PROCS || {
-    make clean
-    make $BUILD_TARGET -j$NUM_PROCS
-}
-popd
+
+if [ $NO_REBUILD == 0 ] then
+    pushd $autotest/../../$VEHICLE || {
+        echo "Failed to change to vehicle directory for $VEHICLE"
+        usage
+        exit 1
+    }
+    if [ ! -f $autotest/../../config.mk ]; then
+        echo Generating a default configuration
+        make configure
+    fi
+    if [ $CLEAN_BUILD == 1 ]; then
+        make clean
+    fi
+    make $BUILD_TARGET -j$NUM_PROCS || {
+        make clean
+        make $BUILD_TARGET -j$NUM_PROCS
+    }
+    popd
 fi
 
 # get the location information
